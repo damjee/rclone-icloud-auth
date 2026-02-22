@@ -5,7 +5,8 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "start": "node index.ts"
+    "start": "node index.ts",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "Matthew Evans",
@@ -14,5 +15,9 @@
     "puppeteer": "^24.34.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "vitest": "^4.0.18"
   }
 }

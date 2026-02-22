@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "start": "node src/index.ts",
+    "start": "tsx src/index.ts --headless",
     "test": "vitest run"
   },
   "keywords": [],
@@ -14,7 +14,8 @@
   "dependencies": {
     "puppeteer": "^24.34.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

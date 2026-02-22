@@ -3,20 +3,17 @@
 ## Running the project
 
 ```bash
-# GUI mode (opens a visible browser window — user logs in manually)
-node src/index.ts
-
 # Headless mode (automated — prompts for Apple ID, password, and 2FA code)
-node src/index.ts --headless
+tsx src/index.ts --headless
 
 # Headless with debug screenshots saved to /tmp/icloud-debug-*.png
-node src/index.ts --headless --debug
+tsx src/index.ts --headless --debug
 
 # Run tests
 npm test
 ```
 
-No build step. Scripts run directly via Node.js with native TypeScript support.
+No build step. Run directly via `tsx` (installed as a dependency: `npx tsx` or `./node_modules/.bin/tsx`).
 
 ## Active refactor
 

@@ -26,20 +26,12 @@ npm install
 
 ## Usage
 
-### GUI mode (default)
-
-Opens a visible Chrome window. Log in manually with your Apple ID and 2FA. The script intercepts the auth flow and patches your `rclone.conf` automatically.
+Prompts for your Apple ID, password, and 2FA code via the terminal. Patches `rclone.conf` automatically.
 
 ```bash
-node src/index.ts
-```
-
-### Headless mode
-
-Automated — prompts for your Apple ID, password, and 2FA code via the terminal. No browser window appears.
-
-```bash
-node src/index.ts --headless
+npm start
+# or
+tsx src/index.ts --headless
 ```
 
 ### Debug mode
@@ -47,7 +39,7 @@ node src/index.ts --headless
 Saves screenshots to `/tmp/icloud-debug-*.png` at each step of the headless flow. Useful when the flow breaks.
 
 ```bash
-node src/index.ts --headless --debug
+tsx src/index.ts --headless --debug
 ```
 
 ---

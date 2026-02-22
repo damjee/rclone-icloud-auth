@@ -4,6 +4,78 @@
 
 ```bash
 # GUI mode (opens a visible browser window — user logs in manually)
+node src/index.ts
+
+# Headless mode (automated — prompts for Apple ID, password, and 2FA code)
+node src/index.ts --headless
+
+# Headless with debug screenshots saved to /tmp/icloud-debug-*.png
+node src/index.ts --headless --debug
+
+# Run tests
+npm test
+```
+
+No build step. Scripts run directly via Node.js with native TypeScript support.
+
+## Active refactor
+
+**Branch:** `testability-refactor` — a ports & adapters refactor is in progress. `main` is untouched.
+
+**Current state:** GREEN phase complete. All 29 tests pass. `src/core/` and `src/adapters/` are fully implemented. Old top-level `index.ts` and `headless.ts` have been removed.
+
+**Structure:**
+```
+src/
+  index.ts                  ← CLI entry (--headless, --debug flags)
+  core/                     ← pure, testable, zero Apple/puppeteer/fs deps
+    cookies.ts / config.ts / args.ts / orchestrator.ts
+  adapters/                 ← Apple/library boundary, not unit tested
+    browser-gui.ts / browser-headless.ts / filesystem.ts / prompt.ts / process.ts
+tests/
+  core/                     ← Vitest unit tests (behavior, fakes over mocks)
+    cookies.test.ts / config.test.ts / args.test.ts / orchestrator.test.ts
+llm-docs/                   ← gitignored LLM communication docs
+  testing-strategy.md       ← explains test intent for reviewing LLMs
+```
+
+**AuthAdapter interface** is the seam between core and adapters:
+```typescript
+interface AuthResult { trustToken: string; cookies: string; }
+interface AuthAdapter { authenticate(): Promise<AuthResult>; }
+```
+
+## Architecture
+
+This tool automates the iCloud auth flow required to keep an **rclone iCloud remote** working. Apple's iCloud requires a short-lived session cookie (`X-APPLE-WEBAUTH-HSA-TRUST`) for rclone to connect. This tool retrieves that cookie via a browser and writes it into `~/.config/rclone/rclone.conf`.
+
+### Auth modes
+
+| Flag | Mode | Adapter |
+|------|------|---------|
+| _(none)_ | **GUI / headful** | `browser-gui.ts` — opens visible Chrome, intercepts `/accountLogin`, waits for trust cookie in request headers |
+| `--headless` | **Headless / automated** | `browser-headless.ts` — prompts for Apple ID + password + 2FA via stdin, uses puppeteer-extra + stealth plugin |
+
+### Key auth details
+- Apple's login page loads inside an **iframe** from `idmsa.apple.com` — always check `page.frames()` when looking for input fields, not just the top-level page.
+- The password field has `tabindex="-1"` until Apple validates the Apple ID; poll until it becomes `"0"` before typing.
+- Apple sets the trust cookie via **response headers**, not JavaScript — poll `page.cookies()` rather than intercepting requests.
+- `extended_login: true` is injected into the `/accountLogin` POST body to obtain a longer-lived trust token.
+
+## Key conventions
+
+- **ESM with top-level `await`** — `package.json` has `"type": "module"`. `src/index.ts` uses top-level `await`.
+- **`puppeteer` vs `puppeteer-extra`** — `browser-gui.ts` uses plain `puppeteer`; `browser-headless.ts` uses `puppeteer-extra` + stealth plugin.
+- **Request interception order** — Always check `request.isInterceptResolutionHandled()` before calling `request.continue()`.
+- **rclone.conf patching** — Pure string transformation in `src/core/config.ts`. Filesystem I/O only in `src/adapters/filesystem.ts`. Writes with mode `0o600`.
+- **Debug screenshots** — Opt-in via `--debug` flag; captured only in `browser-headless.ts`.
+- **Clean code standards** — Early returns over nesting, named constants for all magic values (selectors, timeouts, URL fragments), intent-revealing names (no abbreviations), self-documenting code (no inline comments), functions ~20 lines max.
+- **Testing philosophy** — Test behavior/contracts not implementation, fakes over mocks, F.I.R.S.T., no snapshots. See `llm-docs/testing-strategy.md` for full test intent documentation.
+
+## Running the project
+
+```bash
+# GUI mode (opens a visible browser window — user logs in manually)
 node index.ts
 
 # Headless mode (automated — prompts for Apple ID, password, and 2FA code)

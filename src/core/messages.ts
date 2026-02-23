@@ -1,5 +1,4 @@
 export const Messages = {
-  BANNER: "=== rclone iCloud Authenticator ===",
   LAUNCHING_BROWSER: "\nLaunching headless browser...",
   NAVIGATING_TO_ICLOUD: "Navigating to iCloud...",
   ENTERING_APPLE_ID: "Entering Apple ID...",

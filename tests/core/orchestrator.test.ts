@@ -27,7 +27,7 @@ describe("orchestrate", () => {
       cookies: "SESSION=abc; X-APPLE-WEBAUTH-HSA-TRUST=mytoken",
     });
 
-    const result = await orchestrate(adapter, { existingConfigContent: null });
+    const result = await orchestrate(adapter, { existingConfigContent: null, remoteName: "iclouddrive" });
 
     expect(result.rcloneCommand).toContain("trust_token='mytoken'");
     expect(result.rcloneCommand).toContain(
@@ -47,7 +47,7 @@ cookies = old_cookies
 trust_token = old_token
 `;
 
-    const result = await orchestrate(adapter, { existingConfigContent });
+    const result = await orchestrate(adapter, { existingConfigContent, remoteName: "iclouddrive" });
 
     expect(result.updatedConfigContent).toContain("cookies = SESSION=new; X-APPLE-WEBAUTH-HSA-TRUST=newtoken");
     expect(result.updatedConfigContent).toContain("trust_token = newtoken");
@@ -63,6 +63,7 @@ trust_token = old_token
 
     const result = await orchestrate(adapter, {
       existingConfigContent: "[iclouddrive]\ntype = iclouddrive\n",
+      remoteName: "iclouddrive",
     });
 
     expect(result.rcloneCommand).toContain("trust_token='tok'");
@@ -72,7 +73,18 @@ trust_token = old_token
     const adapter = new FailingAuthAdapter();
 
     await expect(
-      orchestrate(adapter, { existingConfigContent: null })
+      orchestrate(adapter, { existingConfigContent: null, remoteName: "iclouddrive" })
     ).rejects.toThrow("Authentication failed");
+  });
+
+  it("uses the provided remote name in the rclone command", async () => {
+    const adapter = new FakeAuthAdapter({ trustToken: "tok", cookies: "SESSION=x" });
+
+    const result = await orchestrate(adapter, {
+      existingConfigContent: null,
+      remoteName: "myicloud",
+    });
+
+    expect(result.rcloneCommand).toContain("rclone config update myicloud");
   });
 });

@@ -9,7 +9,7 @@ Apple's iCloud requires a short-lived session cookie (`X-APPLE-WEBAUTH-HSA-TRUST
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) v22+
-- [rclone](https://rclone.org/install/) with an iCloud remote named `iclouddrive` already configured
+- [rclone](https://rclone.org/install/) with at least one iCloud remote already configured (`rclone config`)
 - Chrome/Chromium (installed automatically by puppeteer)
 
 ---
@@ -27,6 +27,8 @@ npm install
 ## Usage
 
 Prompts for your Apple ID, password, and 2FA code via the terminal. Patches `rclone.conf` automatically.
+
+On startup the tool reads your `rclone.conf`, finds all iCloud remotes (`type = iclouddrive`), and asks you to select which one to update. If there is only one iCloud remote it is selected automatically. Your choice is remembered in `temp/preferences.json` and pre-selected on the next run.
 
 ```bash
 npm start
@@ -60,12 +62,15 @@ The `--headless` adapter uses [`puppeteer-extra`](https://github.com/berstend/pu
 2. Injects `extended_login: true` into the `/accountLogin` POST body for a longer-lived token
 3. In headless mode: fills Apple ID, waits for the password field to activate (`tabindex` changes from `-1` to `0`), fills password, handles 2FA, and clicks the Trust button if prompted
 4. Polls for the `X-APPLE-WEBAUTH-HSA-TRUST` cookie
-5. Writes the cookie and trust token into `~/.config/rclone/rclone.conf` under `[iclouddrive]`
-6. Runs `rclone lsd iclouddrive:` as a connection test
+5. Writes the cookie and trust token into `~/.config/rclone/rclone.conf` under the selected remote section
+6. Runs `rclone lsd <remote>:` as a connection test
 
 ---
 
 ## Troubleshooting
+
+**No iCloud remotes found**
+Run `rclone config` to add an iCloud remote first, then re-run this tool.
 
 **rclone.conf not found**
 If `~/.config/rclone/rclone.conf` doesn't exist, the script prints the `rclone config update` command to run manually.

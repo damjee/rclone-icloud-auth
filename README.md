@@ -32,38 +32,7 @@ On startup the tool reads your `rclone.conf`, finds all iCloud remotes (`type = 
 
 ```bash
 npm start
-# or
-tsx src/index.ts --headless
 ```
-
-### Debug mode
-
-Saves screenshots to `/tmp/icloud-debug-*.png` at each step of the headless flow. Useful when the flow breaks.
-
-```bash
-tsx src/index.ts --headless --debug
-```
-
----
-
-## How it works
-
-The project uses a **ports & adapters** architecture to keep the core logic pure and testable:
-
-- **`src/core/`** — pure functions: cookie parsing, rclone.conf patching, CLI arg parsing, flow orchestration. No Apple or browser dependencies.
-- **`src/adapters/`** — the Apple/browser boundary: puppeteer automation (GUI and headless), filesystem read/write, stdin prompts, rclone connection test.
-- **`src/index.ts`** — wires the selected adapter to the core orchestrator based on CLI flags.
-
-The `--headless` adapter uses [`puppeteer-extra`](https://github.com/berstend/puppeteer-extra) with the stealth plugin to bypass Apple's bot detection.
-
-### What the auth flow does
-
-1. Navigates to `icloud.com` and clicks the sign-in button
-2. Injects `extended_login: true` into the `/accountLogin` POST body for a longer-lived token
-3. In headless mode: fills Apple ID, waits for the password field to activate (`tabindex` changes from `-1` to `0`), fills password, handles 2FA, and clicks the Trust button if prompted
-4. Polls for the `X-APPLE-WEBAUTH-HSA-TRUST` cookie
-5. Writes the cookie and trust token into `~/.config/rclone/rclone.conf` under the selected remote section
-6. Runs `rclone lsd <remote>:` as a connection test
 
 ---
 
@@ -76,21 +45,7 @@ Run `rclone config` to add an iCloud remote first, then re-run this tool.
 If `~/.config/rclone/rclone.conf` doesn't exist, the script prints the `rclone config update` command to run manually.
 
 **2FA / Trust button not found**
-Run with `--debug` to capture screenshots at each step:
-```bash
-node src/index.ts --headless --debug
-# screenshots saved to /tmp/icloud-debug-*.png
-```
+Re-run the script and check your Apple ID credentials. Ensure your device is nearby to receive the 2FA prompt.
 
 **Connection test fails after patching**
 The trust cookie is short-lived. Re-run the script to refresh it.
-
----
-
-## Development
-
-```bash
-npm test          # run all unit tests
-```
-
-Tests cover the pure core logic only (`src/core/`). Browser and Apple integrations are not unit tested — use `--debug` screenshots for those.

@@ -2,7 +2,6 @@ import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { formatCookiesArray } from "../core/cookies.js";
 import type { AuthFlowDriver } from "../core/auth-flow.js";
-import type { DebugCapture } from "../core/debug-capture.js";
 import type { AuthResult } from "../core/orchestrator.js";
 
 puppeteer.use(StealthPlugin());
@@ -37,9 +36,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class BrowserDriver implements AuthFlowDriver {
   private browser: any = null;
-  private page: any = null;
-
-  constructor(private readonly debugCapture: DebugCapture) {}
+  protected page: any = null;
 
   async launch(): Promise<void> {
     this.browser = await puppeteer.launch({
@@ -84,7 +81,7 @@ export class BrowserDriver implements AuthFlowDriver {
     await signInButton.click();
 
     await sleep(AUTH_FRAME_WAIT_MS);
-    this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-01-after-signin-click.png" }));
+    this.afterNavigateToSignIn();
   }
 
   async enterAppleId(appleId: string): Promise<void> {
@@ -102,14 +99,14 @@ export class BrowserDriver implements AuthFlowDriver {
     );
 
     await sleep(POST_APPLE_ID_WAIT_MS);
-    this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-03-after-appleid.png" }));
+    this.afterEnterAppleId();
   }
 
   async enterPassword(password: string): Promise<void> {
     await this.fillPasswordWithTabindexPolling(password, "/tmp/icloud-debug-04-no-password-input.png");
 
     await sleep(POST_PASSWORD_WAIT_MS);
-    this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-05-after-password.png" }));
+    this.afterEnterPassword();
   }
 
   async checkTwoFactor(): Promise<{ twoFactorRequired: boolean }> {
@@ -119,14 +116,14 @@ export class BrowserDriver implements AuthFlowDriver {
       const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
 
       if (digitInput) {
-        this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-07-2fa-screen.png" }));
+        this.afterCheckTwoFactor(true);
         return { twoFactorRequired: true };
       }
 
       await sleep(1000);
     }
 
-    this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-07-2fa-not-found.png" }));
+    this.afterCheckTwoFactor(false);
     return { twoFactorRequired: false };
   }
 
@@ -145,10 +142,9 @@ export class BrowserDriver implements AuthFlowDriver {
     await freshInput.press("Enter");
 
     await sleep(POST_2FA_WAIT_MS);
-    this.debugCapture.captureState(() => this.page.screenshot({ path: "/tmp/icloud-debug-08-after-2fa.png" }));
-
     await this.clickTrustButtonIfPresent(freshAuthFrame);
     await sleep(POST_TRUST_WAIT_MS);
+    this.afterSubmitTwoFactorCode();
   }
 
   async waitForResult(): Promise<AuthResult> {
@@ -177,6 +173,12 @@ export class BrowserDriver implements AuthFlowDriver {
   async close(): Promise<void> {
     await this.browser.close();
   }
+
+  protected afterNavigateToSignIn(): void {}
+  protected afterEnterAppleId(): void {}
+  protected afterEnterPassword(): void {}
+  protected afterCheckTwoFactor(_twoFactorRequired: boolean): void {}
+  protected afterSubmitTwoFactorCode(): void {}
 
   private async findAuthFrame(): Promise<any> {
     for (const frame of this.page.frames()) {

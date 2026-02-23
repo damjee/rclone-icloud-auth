@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "keywords": [],
-  "author": "Matthew Evans",
+  "author": "Adam Gonzales",
   "license": "MIT",
   "dependencies": {
     "puppeteer": "^24.34.0",

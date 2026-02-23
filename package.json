@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "start": "tsx src/index.ts --headless",
+    "start": "tsx src/index.ts",
     "test": "vitest run"
   },
   "keywords": [],

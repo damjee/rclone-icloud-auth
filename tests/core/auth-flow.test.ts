@@ -72,7 +72,7 @@ describe("runAuthFlow", () => {
   it("returns AuthResult from waitForResult when 2FA is not required", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    const result = await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    const result = await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(result).toEqual(FAKE_AUTH_RESULT);
   });
@@ -80,7 +80,7 @@ describe("runAuthFlow", () => {
   it("passes appleId from promptCredentials to enterAppleId", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(driver.appleIdReceived).toBe(FAKE_CREDENTIALS.appleId);
   });
@@ -88,15 +88,33 @@ describe("runAuthFlow", () => {
   it("passes password from promptCredentials to enterPassword", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(driver.passwordReceived).toBe(FAKE_CREDENTIALS.password);
+  });
+
+  it("passes PROMPT_APPLE_ID and PROMPT_PASSWORD to promptCredentials", async () => {
+    const driver = new FakeAuthFlowDriver(false);
+    let receivedPrompts: { appleId: string; password: string } | null = null;
+
+    await runAuthFlow(driver, async (prompts) => { receivedPrompts = prompts; return FAKE_CREDENTIALS; }, async (_p) => FAKE_2FA_CODE);
+
+    expect(receivedPrompts).toEqual({ appleId: Messages.PROMPT_APPLE_ID, password: Messages.PROMPT_PASSWORD });
+  });
+
+  it("passes PROMPT_2FA_CODE to promptTwoFactorCode when 2FA is required", async () => {
+    const driver = new FakeAuthFlowDriver(true);
+    let receivedPrompt: string | null = null;
+
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (prompt) => { receivedPrompt = prompt; return FAKE_2FA_CODE; });
+
+    expect(receivedPrompt).toBe(Messages.PROMPT_2FA_CODE);
   });
 
   it("calls close after waitForResult", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(driver.closeCalled).toBe(true);
   });
@@ -105,7 +123,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
     let promptCalled = false;
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => {
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => {
       promptCalled = true;
       return FAKE_2FA_CODE;
     });
@@ -116,7 +134,7 @@ describe("runAuthFlow", () => {
   it("does not call submitTwoFactorCode when 2FA is not required", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(driver.submitTwoFactorCodeCalled).toBe(false);
   });
@@ -124,7 +142,7 @@ describe("runAuthFlow", () => {
   it("calls submitTwoFactorCode with code from promptTwoFactorCode when 2FA is required", async () => {
     const driver = new FakeAuthFlowDriver(true);
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(driver.twoFactorCodeReceived).toBe(FAKE_2FA_CODE);
   });
@@ -132,18 +150,19 @@ describe("runAuthFlow", () => {
   it("returns AuthResult from waitForResult when 2FA is required", async () => {
     const driver = new FakeAuthFlowDriver(true);
 
-    const result = await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    const result = await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE);
 
     expect(result).toEqual(FAKE_AUTH_RESULT);
   });
 
-  it("logs each step in order", async () => {
+  it("logs BANNER first, then each step in order", async () => {
     const driver = new FakeAuthFlowDriver(false);
     const logged: string[] = [];
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE, (msg) => logged.push(msg));
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE, (msg) => logged.push(msg));
 
     expect(logged).toEqual([
+      Messages.BANNER,
       Messages.LAUNCHING_BROWSER,
       Messages.NAVIGATING_TO_ICLOUD,
       Messages.ENTERING_APPLE_ID,
@@ -157,7 +176,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(true);
     const logged: string[] = [];
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE, (msg) => logged.push(msg));
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE, (msg) => logged.push(msg));
 
     expect(logged).toContain(Messages.TWO_FACTOR_REQUIRED);
     expect(logged).toContain(Messages.SUBMITTING_TWO_FACTOR);
@@ -167,7 +186,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
     const logged: string[] = [];
 
-    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE, (msg) => logged.push(msg));
+    await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE, (msg) => logged.push(msg));
 
     expect(logged).not.toContain(Messages.TWO_FACTOR_REQUIRED);
   });
@@ -176,7 +195,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runAuthFlow(driver, async () => ({ appleId: "", password: "password123" }), async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async (_p) => ({ appleId: "", password: "password123" }), async (_p) => FAKE_2FA_CODE)
     ).rejects.toThrow();
   });
 
@@ -184,7 +203,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runAuthFlow(driver, async () => ({ appleId: "test@example.com", password: "" }), async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async (_p) => ({ appleId: "test@example.com", password: "" }), async (_p) => FAKE_2FA_CODE)
     ).rejects.toThrow();
   });
 
@@ -192,7 +211,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(true);
 
     await expect(
-      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+      runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => "")
     ).rejects.toThrow();
   });
 
@@ -200,7 +219,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+      runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => "")
     ).resolves.toEqual(FAKE_AUTH_RESULT);
   });
 
@@ -208,7 +227,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false, FAKE_AUTH_RESULT, "enterAppleId");
 
     await expect(
-      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on enterAppleId");
   });
 
@@ -216,7 +235,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(true, FAKE_AUTH_RESULT, "submitTwoFactorCode");
 
     await expect(
-      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on submitTwoFactorCode");
   });
 
@@ -224,8 +243,7 @@ describe("runAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false, FAKE_AUTH_RESULT, "waitForResult");
 
     await expect(
-      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on waitForResult");
   });
 });
-

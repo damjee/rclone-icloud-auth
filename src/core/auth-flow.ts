@@ -18,11 +18,16 @@ const EMPTY_TWO_FACTOR_CODE_ERROR = "Two-factor code must not be empty";
 
 export async function runAuthFlow(
   driver: AuthFlowDriver,
-  promptCredentials: () => Promise<{ appleId: string; password: string }>,
-  promptTwoFactorCode: () => Promise<string>,
+  promptCredentials: (prompts: { appleId: string; password: string }) => Promise<{ appleId: string; password: string }>,
+  promptTwoFactorCode: (prompt: string) => Promise<string>,
   log: (message: string) => void = () => {}
 ): Promise<AuthResult> {
-  const { appleId, password } = await promptCredentials();
+  log(Messages.BANNER);
+
+  const { appleId, password } = await promptCredentials({
+    appleId: Messages.PROMPT_APPLE_ID,
+    password: Messages.PROMPT_PASSWORD,
+  });
 
   if (!appleId) throw new Error(EMPTY_APPLE_ID_ERROR);
   if (!password) throw new Error(EMPTY_PASSWORD_ERROR);
@@ -44,7 +49,7 @@ export async function runAuthFlow(
 
   if (twoFactorRequired) {
     log(Messages.TWO_FACTOR_REQUIRED);
-    const code = await promptTwoFactorCode();
+    const code = await promptTwoFactorCode(Messages.PROMPT_2FA_CODE);
     if (!code) throw new Error(EMPTY_TWO_FACTOR_CODE_ERROR);
 
     log(Messages.SUBMITTING_TWO_FACTOR);

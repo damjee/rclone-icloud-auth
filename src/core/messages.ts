@@ -1,20 +1,11 @@
 export const Messages = {
   LAUNCHING_BROWSER: "\nLaunching headless browser...",
   NAVIGATING_TO_ICLOUD: "Navigating to iCloud...",
-  CLICKING_SIGN_IN: "Clicking sign-in button...",
-  WAITING_FOR_AUTH_FRAME: "Waiting for Apple auth frame...",
   ENTERING_APPLE_ID: "Entering Apple ID...",
   ENTERING_PASSWORD: "Entering password...",
   CHECKING_FOR_TWO_FACTOR: "Checking for 2FA...",
-  TWO_FACTOR_SUBMITTED: "  2FA submitted, waiting for Apple to verify...",
-  WAITING_FOR_AUTH: "Waiting for authentication to complete...",
-  TWO_FACTOR_NOT_FOUND: "  2FA input not found — proceeding without 2FA.",
-  CLICKING_TRUST_BUTTON: "  Clicking Trust button...",
-  TRUST_BUTTON_CLICKED: "  Clicked Trust button.",
-  TRUST_BUTTON_NOT_FOUND: "  Trust button not found — may proceed anyway.",
-  TRUST_COOKIE_FOUND: "✓ Trust cookie found.",
   TWO_FACTOR_REQUIRED: "Two-factor authentication required.",
-  waitingForCookie: (elapsedSeconds: number, cookieCount: number) =>
-    `  Waiting... (${elapsedSeconds}s elapsed, ${cookieCount} cookies so far)`,
-  debugScreenshot: (path: string) => `  [debug] screenshot: ${path}`,
+  SUBMITTING_TWO_FACTOR: "Submitting 2FA code...",
+  WAITING_FOR_AUTH: "Waiting for authentication to complete...",
 } as const;
+

@@ -9,7 +9,7 @@ export class HeadlessAuthAdapter implements AuthAdapter {
   async authenticate(): Promise<AuthResult> {
     console.log("=== rclone iCloud Authenticator ===\n");
 
-    const driver = new BrowserDriver(this.debugEnabled, console.log);
+    const driver = new BrowserDriver(this.debugEnabled);
 
     const result = await runAuthFlow(
       driver,

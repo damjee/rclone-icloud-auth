@@ -1,7 +1,6 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { formatCookiesArray } from "../core/cookies.js";
-import { Messages } from "../core/messages.js";
 import type { AuthFlowDriver } from "../core/auth-flow.js";
 import type { AuthResult } from "../core/orchestrator.js";
 
@@ -39,14 +38,9 @@ export class BrowserDriver implements AuthFlowDriver {
   private browser: any = null;
   private page: any = null;
 
-  constructor(
-    private readonly debugEnabled: boolean,
-    private readonly log: (message: string) => void = () => {}
-  ) {}
+  constructor(private readonly debugEnabled: boolean) {}
 
-  async beginAuth(appleId: string, password: string): Promise<{ twoFactorRequired: boolean }> {
-    this.log(Messages.LAUNCHING_BROWSER);
-
+  async launch(): Promise<void> {
     this.browser = await puppeteer.launch({
       headless: true,
       timeout: 0,
@@ -77,22 +71,22 @@ export class BrowserDriver implements AuthFlowDriver {
       }
       request.continue();
     });
+  }
 
-    this.log(Messages.NAVIGATING_TO_ICLOUD);
+  async navigateToSignIn(): Promise<void> {
     await this.page.goto(ICLOUD_URL, { waitUntil: "networkidle2" });
 
-    this.log(Messages.CLICKING_SIGN_IN);
     const signInButton = await this.page.waitForSelector(SIGN_IN_BUTTON_SELECTOR, {
       timeout: SIGN_IN_BUTTON_TIMEOUT_MS,
     });
     if (!signInButton) throw new Error("Could not find sign-in button on iCloud page");
     await signInButton.click();
 
-    this.log(Messages.WAITING_FOR_AUTH_FRAME);
     await sleep(AUTH_FRAME_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-01-after-signin-click.png");
+  }
 
-    this.log(Messages.ENTERING_APPLE_ID);
+  async enterAppleId(appleId: string): Promise<void> {
     await this.fillFieldWithPolling(
       APPLE_ID_POLL_ATTEMPTS,
       POLL_INTERVAL_MS,
@@ -108,20 +102,34 @@ export class BrowserDriver implements AuthFlowDriver {
 
     await sleep(POST_APPLE_ID_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-03-after-appleid.png");
+  }
 
-    this.log(Messages.ENTERING_PASSWORD);
+  async enterPassword(password: string): Promise<void> {
     await this.fillPasswordWithTabindexPolling(password, "/tmp/icloud-debug-04-no-password-input.png");
 
     await sleep(POST_PASSWORD_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-05-after-password.png");
-
-    this.log(Messages.CHECKING_FOR_TWO_FACTOR);
-    const twoFactorRequired = await this.detectTwoFactor();
-
-    return { twoFactorRequired };
   }
 
-  async completeTwoFactorAuth(code: string): Promise<AuthResult> {
+  async checkTwoFactor(): Promise<{ twoFactorRequired: boolean }> {
+    for (let attempt = 0; attempt < TWO_FA_POLL_ATTEMPTS; attempt++) {
+      const authFrame = await this.findAuthFrame();
+      const target = authFrame ?? this.page;
+      const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
+
+      if (digitInput) {
+        this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-screen.png");
+        return { twoFactorRequired: true };
+      }
+
+      await sleep(1000);
+    }
+
+    this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-not-found.png");
+    return { twoFactorRequired: false };
+  }
+
+  async submitTwoFactorCode(code: string): Promise<void> {
     const authFrame = await this.findAuthFrame();
     const target = authFrame ?? this.page;
     const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
@@ -135,39 +143,38 @@ export class BrowserDriver implements AuthFlowDriver {
     await sleep(1000);
     await freshInput.press("Enter");
 
-    this.log(Messages.TWO_FACTOR_SUBMITTED);
     await sleep(POST_2FA_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-08-after-2fa.png");
 
     await this.clickTrustButtonIfPresent(freshAuthFrame);
     await sleep(POST_TRUST_WAIT_MS);
-
-    this.log(Messages.WAITING_FOR_AUTH);
-    return this.pollForTrustCookieAndClose();
   }
 
-  async collectResult(): Promise<AuthResult> {
-    this.log(Messages.WAITING_FOR_AUTH);
-    return this.pollForTrustCookieAndClose();
-  }
+  async waitForResult(): Promise<AuthResult> {
+    for (let attempt = 0; attempt < TRUST_COOKIE_POLL_ATTEMPTS; attempt++) {
+      await sleep(TRUST_COOKIE_POLL_INTERVAL_MS);
 
-  private async detectTwoFactor(): Promise<boolean> {
-    for (let attempt = 0; attempt < TWO_FA_POLL_ATTEMPTS; attempt++) {
-      const authFrame = await this.findAuthFrame();
-      const target = authFrame ?? this.page;
-      const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
+      const cookies = await this.page.cookies(
+        "https://www.icloud.com",
+        "https://idmsa.apple.com",
+        "https://apple.com"
+      );
+      const trustCookie = cookies.find((c: any) => c.name === TRUST_COOKIE_NAME);
 
-      if (digitInput) {
-        this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-screen.png");
-        return true;
+      if (trustCookie) {
+        return {
+          trustToken: trustCookie.value,
+          cookies: formatCookiesArray(cookies.map((c: any) => `${c.name}=${c.value}`)),
+        };
       }
-
-      await sleep(1000);
     }
 
-    this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-not-found.png");
-    this.log(Messages.TWO_FACTOR_NOT_FOUND);
-    return false;
+    await this.page.screenshot({ path: "/tmp/icloud-debug-timeout.png" });
+    throw new Error("Timed out waiting for trust cookie — see /tmp/icloud-debug-timeout.png");
+  }
+
+  async close(): Promise<void> {
+    await this.browser.close();
   }
 
   private async findAuthFrame(): Promise<any> {
@@ -237,58 +244,19 @@ export class BrowserDriver implements AuthFlowDriver {
     const trustButton = await target.$(TRUST_BUTTON_SELECTOR);
 
     if (trustButton) {
-      this.log(Messages.CLICKING_TRUST_BUTTON);
       await trustButton.click();
       return;
     }
 
-    const clicked = await target.evaluate(() => {
+    await target.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll("button"));
       const trust = buttons.find((b) => b.textContent?.trim() === "Trust");
-      if (trust) { trust.click(); return true; }
-      return false;
+      if (trust) trust.click();
     });
-
-    if (clicked) {
-      this.log(Messages.TRUST_BUTTON_CLICKED);
-    } else {
-      this.log(Messages.TRUST_BUTTON_NOT_FOUND);
-    }
-  }
-
-  private async pollForTrustCookieAndClose(): Promise<AuthResult> {
-    for (let attempt = 0; attempt < TRUST_COOKIE_POLL_ATTEMPTS; attempt++) {
-      await sleep(TRUST_COOKIE_POLL_INTERVAL_MS);
-
-      const cookies = await this.page.cookies(
-        "https://www.icloud.com",
-        "https://idmsa.apple.com",
-        "https://apple.com"
-      );
-      const trustCookie = cookies.find((c: any) => c.name === TRUST_COOKIE_NAME);
-
-      if (trustCookie) {
-        this.log(Messages.TRUST_COOKIE_FOUND);
-        await this.browser.close();
-        return {
-          trustToken: trustCookie.value,
-          cookies: formatCookiesArray(cookies.map((c: any) => `${c.name}=${c.value}`)),
-        };
-      }
-
-      if (attempt % 5 === 0) {
-        this.log(Messages.waitingForCookie(attempt * 2, cookies.length));
-      }
-    }
-
-    await this.page.screenshot({ path: "/tmp/icloud-debug-timeout.png" });
-    await this.browser.close();
-    throw new Error("Timed out waiting for trust cookie — see /tmp/icloud-debug-timeout.png");
   }
 
   private captureDebugScreenshot(path: string): void {
     if (!this.debugEnabled) return;
     this.page.screenshot({ path }).catch(() => {});
-    this.log(Messages.debugScreenshot(path));
   }
 }

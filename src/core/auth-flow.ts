@@ -1,4 +1,5 @@
 import type { AuthResult } from "./orchestrator.js";
+import { Messages } from "./messages.js";
 
 export interface AuthFlowDriver {
   beginAuth(appleId: string, password: string): Promise<{ twoFactorRequired: boolean }>;
@@ -24,7 +25,7 @@ export async function runAuthFlow(
   const { twoFactorRequired } = await driver.beginAuth(appleId, password);
 
   if (twoFactorRequired) {
-    log("Two-factor authentication required.");
+    log(Messages.TWO_FACTOR_REQUIRED);
     const code = await promptTwoFactorCode();
     if (!code) throw new Error(EMPTY_TWO_FACTOR_CODE_ERROR);
     return driver.completeTwoFactorAuth(code);

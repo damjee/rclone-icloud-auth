@@ -11,6 +11,7 @@ export interface AuthAdapter {
 
 interface OrchestrateOptions {
   existingConfigContent: string | null;
+  remoteName: string;
 }
 
 interface OrchestrateResult {
@@ -23,10 +24,10 @@ export async function orchestrate(
   options: OrchestrateOptions
 ): Promise<OrchestrateResult> {
   const { trustToken, cookies } = await adapter.authenticate();
-  const rcloneCommand = buildRcloneCommand(cookies, trustToken);
+  const rcloneCommand = buildRcloneCommand(cookies, trustToken, options.remoteName);
   const updatedConfigContent =
     options.existingConfigContent !== null
-      ? updateRcloneConfigContent(options.existingConfigContent, cookies, trustToken)
+      ? updateRcloneConfigContent(options.existingConfigContent, cookies, trustToken, options.remoteName)
       : null;
   return { rcloneCommand, updatedConfigContent };
 }

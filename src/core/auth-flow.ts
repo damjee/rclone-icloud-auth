@@ -22,8 +22,6 @@ export async function runAuthFlow(
   promptTwoFactorCode: (prompt: string) => Promise<string>,
   log: (message: string) => void = () => {}
 ): Promise<AuthResult> {
-  log(Messages.BANNER);
-
   const { appleId, password } = await promptCredentials({
     appleId: Messages.PROMPT_APPLE_ID,
     password: Messages.PROMPT_PASSWORD,

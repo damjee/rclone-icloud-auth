@@ -155,14 +155,13 @@ describe("runAuthFlow", () => {
     expect(result).toEqual(FAKE_AUTH_RESULT);
   });
 
-  it("logs BANNER first, then each step in order", async () => {
+  it("logs each step in order", async () => {
     const driver = new FakeAuthFlowDriver(false);
     const logged: string[] = [];
 
     await runAuthFlow(driver, async (_p) => FAKE_CREDENTIALS, async (_p) => FAKE_2FA_CODE, (msg) => logged.push(msg));
 
     expect(logged).toEqual([
-      Messages.BANNER,
       Messages.LAUNCHING_BROWSER,
       Messages.NAVIGATING_TO_ICLOUD,
       Messages.ENTERING_APPLE_ID,

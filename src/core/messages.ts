@@ -1,5 +1,4 @@
 export const Messages = {
-  BANNER: "=== rclone iCloud Authenticator ===",
   LAUNCHING_BROWSER: "\nLaunching headless browser...",
   NAVIGATING_TO_ICLOUD: "Navigating to iCloud...",
   ENTERING_APPLE_ID: "Entering Apple ID...",
@@ -11,5 +10,9 @@ export const Messages = {
   PROMPT_APPLE_ID: "Apple ID email: ",
   PROMPT_PASSWORD: "Password (will be visible): ",
   PROMPT_2FA_CODE: "\n2FA code (from your iPhone): ",
+  NO_ICLOUD_REMOTES: "No iCloud remotes found in rclone.conf. Add one first with `rclone config`.",
+  PROMPT_SELECT_REMOTE: "\nSelect remote: ",
+  RCLONE_CONF_UPDATED: "\n✓ rclone.conf updated successfully.\n",
+  RCLONE_COMMAND_INSTRUCTIONS: "\nRun the following command to authenticate:",
 } as const;
 

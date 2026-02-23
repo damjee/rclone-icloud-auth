@@ -1,6 +1,6 @@
 import { parseArgs } from "./core/args.js";
 import { orchestrate } from "./core/orchestrator.js";
-import { HeadlessAuthAdapter } from "./adapters/launcher.js";
+import { BrowserAuthAdapter } from "./adapters/launcher.js";
 import { BrowserDriverBuilder } from "./adapters/browser-driver-builder.js";
 import { readRcloneConfigContent, writeRcloneConfigContent } from "./adapters/filesystem.js";
 import { testRcloneConnection } from "./adapters/process.js";
@@ -8,7 +8,7 @@ import { testRcloneConnection } from "./adapters/process.js";
 const args = parseArgs(process.argv.slice(2));
 const builder = new BrowserDriverBuilder();
 if (args.debug) builder.withDebug();
-const adapter = new HeadlessAuthAdapter(builder.build());
+const adapter = new BrowserAuthAdapter(builder.build());
 
 const existingConfigContent = readRcloneConfigContent();
 

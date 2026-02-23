@@ -3,7 +3,7 @@ import { promptUser, resumePrompt, closePrompt } from "./prompt.js";
 import type { AuthFlowDriver } from "../core/auth-flow.js";
 import type { AuthAdapter, AuthResult } from "../core/orchestrator.js";
 
-export class HeadlessAuthAdapter implements AuthAdapter {
+export class BrowserAuthAdapter implements AuthAdapter {
   constructor(private readonly driver: AuthFlowDriver) {}
 
   async authenticate(): Promise<AuthResult> {

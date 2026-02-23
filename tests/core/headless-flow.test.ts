@@ -117,6 +117,38 @@ describe("runHeadlessAuthFlow", () => {
     expect(driver.collectResultCalled).toBe(false);
   });
 
+  it("throws when promptCredentials returns an empty appleId", async () => {
+    const driver = new FakeAuthFlowDriver(false);
+
+    await expect(
+      runHeadlessAuthFlow(driver, async () => ({ appleId: "", password: "password123" }), async () => FAKE_2FA_CODE)
+    ).rejects.toThrow();
+  });
+
+  it("throws when promptCredentials returns an empty password", async () => {
+    const driver = new FakeAuthFlowDriver(false);
+
+    await expect(
+      runHeadlessAuthFlow(driver, async () => ({ appleId: "test@example.com", password: "" }), async () => FAKE_2FA_CODE)
+    ).rejects.toThrow();
+  });
+
+  it("throws when promptTwoFactorCode returns an empty code and 2FA is required", async () => {
+    const driver = new FakeAuthFlowDriver(true);
+
+    await expect(
+      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+    ).rejects.toThrow();
+  });
+
+  it("does not throw for empty 2FA code when 2FA is not required", async () => {
+    const driver = new FakeAuthFlowDriver(false);
+
+    await expect(
+      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+    ).resolves.toEqual(FAKE_AUTH_RESULT);
+  });
+
   it("propagates errors thrown by beginAuth", async () => {
     const driver = new FakeAuthFlowDriver(false, FAKE_AUTH_RESULT, "beginAuth");
 

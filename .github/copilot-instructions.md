@@ -3,6 +3,94 @@
 ## Running the project
 
 ```bash
+npm start      # run the authenticator
+npm test       # run all unit tests
+```
+
+No build step. TypeScript runs directly via `tsx`.
+
+## Project structure
+
+```
+src/
+  index.ts                        ← CLI entry point — wiring only, no flow logic
+  core/                           ← pure, testable, zero I/O dependencies
+    args.ts                       ← CLI argument parsing
+    auth-flow.ts                  ← Apple sign-in flow (injectable deps)
+    config.ts                     ← rclone.conf patching + remote parsing
+    cookies.ts                    ← trust cookie extraction
+    messages.ts                   ← all user-facing strings
+    orchestrator.ts               ← top-level auth orchestration
+    remote-selection.ts           ← remote selection flow (injectable deps)
+  adapters/                       ← I/O boundary: browser, filesystem, prompts, process
+    browser-driver.ts             ← puppeteer-extra headless driver
+    browser-driver-builder.ts     ← builder for the driver (debug mode opt-in)
+    debugging-browser-driver.ts   ← debug screenshot decorator
+    filesystem.ts                 ← rclone.conf + preferences file I/O
+    launcher.ts                   ← BrowserAuthAdapter (wires browser driver to core)
+    process.ts                    ← rclone connection test (execSync)
+    prompt.ts                     ← stdin prompts
+tests/
+  core/                           ← Vitest unit tests (core only)
+temp/                             ← gitignored; stores preferences.json
+```
+
+## Architecture
+
+Ports & adapters. `src/core/` contains pure business logic with zero Apple, puppeteer, or filesystem dependencies. `src/adapters/` is the I/O boundary. `src/index.ts` wires them together.
+
+### Core flow pattern
+
+**All new user-facing flows must follow this pattern**, established by `auth-flow.ts` and `remote-selection.ts`:
+
+1. Create a pure function in `src/core/` that accepts injected dependencies:
+   - `prompt*` functions for any user input
+   - `log` for any console output (`(message: string) => void`, defaults to no-op)
+2. All user-facing strings go in `src/core/messages.ts` — never inline strings in flow functions or `index.ts`
+3. `index.ts` wires the adapter implementations to the core function — no flow logic in `index.ts`
+
+Example:
+```typescript
+// src/core/my-flow.ts
+export async function runMyFlow(
+  promptSomething: (prompt: string) => Promise<string>,
+  log: (message: string) => void = () => {}
+): Promise<MyResult> {
+  log(Messages.SOME_STATUS);
+  const value = await promptSomething(Messages.SOME_PROMPT);
+  ...
+}
+
+// src/index.ts — wiring only
+const result = await runMyFlow(promptUser, console.log);
+```
+
+### AuthAdapter seam
+
+```typescript
+interface AuthResult { trustToken: string; cookies: string; }
+interface AuthAdapter { authenticate(): Promise<AuthResult>; }
+```
+
+### Key auth details
+- Apple's login page loads inside an **iframe** from `idmsa.apple.com` — always check `page.frames()` when looking for input fields
+- The password field has `tabindex="-1"` until Apple validates the Apple ID; poll until it becomes `"0"` before typing
+- Apple sets the trust cookie via **response headers** — poll `page.cookies()` rather than intercepting requests
+- `extended_login: true` is injected into the `/accountLogin` POST body for a longer-lived token
+
+## Key conventions
+
+- **ESM with top-level `await`** — `package.json` has `"type": "module"`. `src/index.ts` uses top-level `await`.
+- **rclone.conf patching** — pure string transformation in `src/core/config.ts`. Filesystem I/O only in `src/adapters/filesystem.ts`. Writes with mode `0o600`.
+- **Preferences** — saved at `temp/preferences.json` (repo-local, gitignored) via `src/adapters/filesystem.ts`.
+- **Clean code standards** — early returns over nesting, named constants for all magic values, intent-revealing names (no abbreviations), self-documenting code (no inline comments), functions ~20 lines max.
+- **Testing philosophy** — test behaviour/contracts not implementation, fakes over mocks, F.I.R.S.T., no snapshots. Unit tests cover `src/core/` only; adapters are not unit tested.
+- **TDD** — write failing tests before implementing new core logic.
+
+
+## Running the project
+
+```bash
 # Headless mode (automated — prompts for Apple ID, password, and 2FA code)
 tsx src/index.ts --headless
 

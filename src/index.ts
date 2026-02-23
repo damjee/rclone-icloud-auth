@@ -1,5 +1,6 @@
 import { parseArgs } from "./core/args.js";
 import { parseIcloudRemotes } from "./core/config.js";
+import { runRemoteSelectionFlow } from "./core/remote-selection.js";
 import { orchestrate } from "./core/orchestrator.js";
 import { BrowserAuthAdapter } from "./adapters/launcher.js";
 import { BrowserDriverBuilder } from "./adapters/browser-driver-builder.js";
@@ -18,26 +19,22 @@ if (args.debug) builder.withDebug();
 const adapter = new BrowserAuthAdapter(builder.build());
 
 const existingConfigContent = readRcloneConfigContent();
-
 const icloudRemotes = existingConfigContent ? parseIcloudRemotes(existingConfigContent) : [];
-
-if (icloudRemotes.length === 0) {
-  console.error("No iCloud remotes found in rclone.conf. Please add one first with `rclone config`.");
-  process.exit(1);
-}
 
 const preferences = readPreferences();
 const savedDefault = preferences.defaultRemote && icloudRemotes.includes(preferences.defaultRemote)
   ? preferences.defaultRemote
   : undefined;
 
-let remoteName: string;
-if (icloudRemotes.length === 1) {
-  remoteName = icloudRemotes[0];
-  console.log(`\nUsing iCloud remote: ${remoteName}`);
-} else {
-  remoteName = await promptSelectRemote(icloudRemotes, savedDefault);
-}
+const { remoteName } = await runRemoteSelectionFlow(
+  icloudRemotes,
+  savedDefault,
+  promptSelectRemote,
+  console.log
+).catch((error: Error) => {
+  console.error(error.message);
+  process.exit(1);
+});
 
 writePreferences({ ...preferences, defaultRemote: remoteName });
 

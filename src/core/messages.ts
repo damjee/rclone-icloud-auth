@@ -11,5 +11,8 @@ export const Messages = {
   PROMPT_APPLE_ID: "Apple ID email: ",
   PROMPT_PASSWORD: "Password (will be visible): ",
   PROMPT_2FA_CODE: "\n2FA code (from your iPhone): ",
+  NO_ICLOUD_REMOTES: "No iCloud remotes found in rclone.conf. Add one first with `rclone config`.",
+  AUTO_SELECTED_REMOTE: (name: string) => `\nUsing iCloud remote: ${name}`,
+  PROMPT_SELECT_REMOTE: "\nSelect remote: ",
 } as const;
 

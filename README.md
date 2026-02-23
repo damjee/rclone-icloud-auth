@@ -41,9 +41,3 @@ Run `rclone config` to add an iCloud remote first, then re-run this tool.
 
 **rclone.conf not found**
 If `~/.config/rclone/rclone.conf` doesn't exist, the script prints the `rclone config update` command to run manually.
-
-**2FA / Trust button not found**
-Re-run the script and check your Apple ID credentials. Ensure your device is nearby to receive the 2FA prompt.
-
-**Connection test fails after patching**
-The trust cookie is short-lived. Re-run the script to refresh it.

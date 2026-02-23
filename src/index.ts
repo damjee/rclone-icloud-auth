@@ -1,14 +1,11 @@
 import { parseArgs } from "./core/args.js";
 import { orchestrate } from "./core/orchestrator.js";
-import { GuiBrowserAdapter } from "./adapters/browser-gui.js";
-import { HeadlessBrowserAdapter } from "./adapters/browser-headless.js";
+import { HeadlessAuthAdapter } from "./adapters/launcher.js";
 import { readRcloneConfigContent, writeRcloneConfigContent } from "./adapters/filesystem.js";
 import { testRcloneConnection } from "./adapters/process.js";
 
 const args = parseArgs(process.argv.slice(2));
-const adapter = args.headless
-  ? new HeadlessBrowserAdapter(args.debug)
-  : new GuiBrowserAdapter();
+const adapter = new HeadlessAuthAdapter(args.debug);
 
 const existingConfigContent = readRcloneConfigContent();
 

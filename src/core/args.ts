@@ -1,6 +1,5 @@
-export function parseArgs(argv: string[]): { headless: boolean; debug: boolean } {
+export function parseArgs(argv: string[]): { debug: boolean } {
   return {
-    headless: argv.includes("--headless"),
     debug: argv.includes("--debug"),
   };
 }

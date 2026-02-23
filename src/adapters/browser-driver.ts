@@ -1,8 +1,8 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { formatCookiesArray } from "../core/cookies.js";
-import { promptUser, resumePrompt, closePrompt } from "./prompt.js";
-import type { AuthAdapter, AuthResult } from "../core/orchestrator.js";
+import type { AuthFlowDriver } from "../core/headless-flow.js";
+import type { AuthResult } from "../core/orchestrator.js";
 
 puppeteer.use(StealthPlugin());
 
@@ -34,22 +34,16 @@ const TWO_FA_TYPE_DELAY_MS = 200;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export class HeadlessBrowserAdapter implements AuthAdapter {
-  private readonly debugEnabled: boolean;
+export class BrowserDriver implements AuthFlowDriver {
+  private browser: any = null;
+  private page: any = null;
 
-  constructor(debugEnabled: boolean) {
-    this.debugEnabled = debugEnabled;
-  }
+  constructor(private readonly debugEnabled: boolean) {}
 
-  async authenticate(): Promise<AuthResult> {
-    console.log("=== rclone iCloud Headless Authenticator ===\n");
-
-    const appleId = await promptUser("Apple ID email: ");
-    const password = await promptUser("Password (will be visible): ");
-
+  async beginAuth(appleId: string, password: string): Promise<{ twoFactorRequired: boolean }> {
     console.log("\nLaunching headless browser...");
 
-    const browser = await puppeteer.launch({
+    this.browser = await puppeteer.launch({
       headless: true,
       timeout: 0,
       args: [
@@ -61,20 +55,18 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
       ],
     });
 
-    const page = (await browser.pages())[0] ?? (await browser.newPage());
-    await page.setUserAgent(STEALTH_USER_AGENT);
+    this.page = (await this.browser.pages())[0] ?? (await this.browser.newPage());
+    await this.page.setUserAgent(STEALTH_USER_AGENT);
 
-    await page.setRequestInterception(true);
-    page.on("request", async (request) => {
+    await this.page.setRequestInterception(true);
+    this.page.on("request", async (request: any) => {
       if (request.isInterceptResolutionHandled()) return;
       if (request.url().includes(ACCOUNT_LOGIN_PATH)) {
         const rawPostBody = await request.fetchPostData();
         if (rawPostBody) {
           try {
             const parsedBody = JSON.parse(rawPostBody);
-            request.continue({
-              postData: JSON.stringify({ ...parsedBody, extended_login: true }),
-            });
+            request.continue({ postData: JSON.stringify({ ...parsedBody, extended_login: true }) });
             return;
           } catch {}
         }
@@ -83,10 +75,10 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
     });
 
     console.log("Navigating to iCloud...");
-    await page.goto(ICLOUD_URL, { waitUntil: "networkidle2" });
+    await this.page.goto(ICLOUD_URL, { waitUntil: "networkidle2" });
 
     console.log("Clicking sign-in button...");
-    const signInButton = await page.waitForSelector(SIGN_IN_BUTTON_SELECTOR, {
+    const signInButton = await this.page.waitForSelector(SIGN_IN_BUTTON_SELECTOR, {
       timeout: SIGN_IN_BUTTON_TIMEOUT_MS,
     });
     if (!signInButton) throw new Error("Could not find sign-in button on iCloud page");
@@ -94,26 +86,14 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
 
     console.log("Waiting for Apple auth frame...");
     await sleep(AUTH_FRAME_WAIT_MS);
-    this.captureDebugScreenshot(page, "/tmp/icloud-debug-01-after-signin-click.png");
-
-    const findAuthFrame = async () => {
-      for (const frame of page.frames()) {
-        const frameUrl = frame.url();
-        if (AUTH_FRAME_URL_FRAGMENTS.some((fragment) => frameUrl.includes(fragment))) {
-          return frame;
-        }
-      }
-      return null;
-    };
+    this.captureDebugScreenshot("/tmp/icloud-debug-01-after-signin-click.png");
 
     console.log("Entering Apple ID...");
     await this.fillFieldWithPolling(
       APPLE_ID_POLL_ATTEMPTS,
       POLL_INTERVAL_MS,
-      findAuthFrame,
-      page,
       APPLE_ID_FIELD_SELECTOR,
-      async (input, target) => {
+      async (input: any) => {
         await input.click({ clickCount: 3 });
         await input.type(appleId, { delay: TYPE_DELAY_MS });
         await input.press("Enter");
@@ -123,79 +103,114 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
     );
 
     await sleep(POST_APPLE_ID_WAIT_MS);
-    this.captureDebugScreenshot(page, "/tmp/icloud-debug-03-after-appleid.png");
+    this.captureDebugScreenshot("/tmp/icloud-debug-03-after-appleid.png");
 
     console.log("Entering password...");
-    await this.fillPasswordWithTabindexPolling(
-      PASSWORD_POLL_ATTEMPTS,
-      POLL_INTERVAL_MS,
-      findAuthFrame,
-      page,
-      password,
-      "/tmp/icloud-debug-04-no-password-input.png"
-    );
+    await this.fillPasswordWithTabindexPolling(password, "/tmp/icloud-debug-04-no-password-input.png");
 
     await sleep(POST_PASSWORD_WAIT_MS);
-    this.captureDebugScreenshot(page, "/tmp/icloud-debug-05-after-password.png");
+    this.captureDebugScreenshot("/tmp/icloud-debug-05-after-password.png");
 
     console.log("Checking for 2FA...");
-    await this.handle2FA(findAuthFrame, page);
+    const twoFactorRequired = await this.detectTwoFactor();
+
+    return { twoFactorRequired };
+  }
+
+  async completeTwoFactorAuth(code: string): Promise<AuthResult> {
+    const authFrame = await this.findAuthFrame();
+    const target = authFrame ?? this.page;
+    const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
+
+    const freshAuthFrame = await this.findAuthFrame();
+    const freshTarget = freshAuthFrame ?? this.page;
+    const freshInput = (await freshTarget.$(TWO_FA_INPUT_SELECTOR)) ?? digitInput;
+
+    await freshInput.click();
+    await freshInput.type(code, { delay: TWO_FA_TYPE_DELAY_MS });
+    await sleep(1000);
+    await freshInput.press("Enter");
+
+    console.log("  2FA submitted, waiting for Apple to verify...");
+    await sleep(POST_2FA_WAIT_MS);
+    this.captureDebugScreenshot("/tmp/icloud-debug-08-after-2fa.png");
+
+    await this.clickTrustButtonIfPresent(freshAuthFrame);
+    await sleep(POST_TRUST_WAIT_MS);
 
     console.log("Waiting for authentication to complete...");
-    const authResult = await this.pollForTrustCookie(page);
+    return this.pollForTrustCookieAndClose();
+  }
 
-    await browser.close();
-    closePrompt();
+  async collectResult(): Promise<AuthResult> {
+    console.log("Waiting for authentication to complete...");
+    return this.pollForTrustCookieAndClose();
+  }
 
-    return authResult;
+  private async detectTwoFactor(): Promise<boolean> {
+    for (let attempt = 0; attempt < TWO_FA_POLL_ATTEMPTS; attempt++) {
+      const authFrame = await this.findAuthFrame();
+      const target = authFrame ?? this.page;
+      const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
+
+      if (digitInput) {
+        this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-screen.png");
+        return true;
+      }
+
+      await sleep(1000);
+    }
+
+    this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-not-found.png");
+    console.log("  2FA input not found — proceeding without 2FA.");
+    return false;
+  }
+
+  private async findAuthFrame(): Promise<any> {
+    for (const frame of this.page.frames()) {
+      const frameUrl = frame.url();
+      if (AUTH_FRAME_URL_FRAGMENTS.some((fragment) => frameUrl.includes(fragment))) {
+        return frame;
+      }
+    }
+    return null;
   }
 
   private async fillFieldWithPolling(
     maxAttempts: number,
     intervalMs: number,
-    findAuthFrame: () => Promise<any>,
-    page: any,
     selector: string,
-    fillAction: (input: any, target: any) => Promise<void>,
+    fillAction: (input: any) => Promise<void>,
     debugScreenshotPath: string,
     errorMessage: string
   ): Promise<void> {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const authFrame = await findAuthFrame();
-      const target = authFrame ?? page;
+      const authFrame = await this.findAuthFrame();
+      const target = authFrame ?? this.page;
       const input = await target.$(selector);
 
       if (input) {
-        await fillAction(input, target);
+        await fillAction(input);
         return;
       }
 
       await sleep(intervalMs);
 
       if (attempt === maxAttempts - 1) {
-        await page.screenshot({ path: debugScreenshotPath });
+        await this.page.screenshot({ path: debugScreenshotPath });
         throw new Error(`${errorMessage} — see ${debugScreenshotPath}`);
       }
     }
   }
 
-  private async fillPasswordWithTabindexPolling(
-    maxAttempts: number,
-    intervalMs: number,
-    findAuthFrame: () => Promise<any>,
-    page: any,
-    password: string,
-    debugScreenshotPath: string
-  ): Promise<void> {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const authFrame = await findAuthFrame();
-      const target = authFrame ?? page;
+  private async fillPasswordWithTabindexPolling(password: string, debugScreenshotPath: string): Promise<void> {
+    for (let attempt = 0; attempt < PASSWORD_POLL_ATTEMPTS; attempt++) {
+      const authFrame = await this.findAuthFrame();
+      const target = authFrame ?? this.page;
       const passwordInput = await target.$(PASSWORD_FIELD_SELECTOR);
 
       if (passwordInput) {
-        const tabIndex = await passwordInput.evaluate((el: Element) =>
-          el.getAttribute("tabindex")
-        );
+        const tabIndex = await passwordInput.evaluate((el: Element) => el.getAttribute("tabindex"));
         if (tabIndex !== "-1") {
           await passwordInput.click({ clickCount: 3 });
           await passwordInput.type(password, { delay: TYPE_DELAY_MS });
@@ -204,59 +219,19 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
         }
       }
 
-      await sleep(intervalMs);
+      await sleep(POLL_INTERVAL_MS);
 
-      if (attempt === maxAttempts - 1) {
-        await page.screenshot({ path: debugScreenshotPath });
-        throw new Error(
-          `Password field never became accessible — see ${debugScreenshotPath}`
-        );
+      if (attempt === PASSWORD_POLL_ATTEMPTS - 1) {
+        await this.page.screenshot({ path: debugScreenshotPath });
+        throw new Error(`Password field never became accessible — see ${debugScreenshotPath}`);
       }
     }
   }
 
-  private async handle2FA(findAuthFrame: () => Promise<any>, page: any): Promise<void> {
-    for (let attempt = 0; attempt < TWO_FA_POLL_ATTEMPTS; attempt++) {
-      const authFrame = await findAuthFrame();
-      const target = authFrame ?? page;
-      const digitInput = await target.$(TWO_FA_INPUT_SELECTOR);
-
-      if (digitInput) {
-        this.captureDebugScreenshot(page, "/tmp/icloud-debug-07-2fa-screen.png");
-        resumePrompt();
-        const code = await promptUser("\n2FA code (from your iPhone): ");
-
-        const freshAuthFrame = await findAuthFrame();
-        const freshTarget = freshAuthFrame ?? page;
-        const freshInput = (await freshTarget.$(TWO_FA_INPUT_SELECTOR)) ?? digitInput;
-
-        await freshInput.click();
-        await freshInput.type(code, { delay: TWO_FA_TYPE_DELAY_MS });
-        await sleep(1000);
-        await freshInput.press("Enter");
-
-        console.log("  2FA submitted, waiting for Apple to verify...");
-        await sleep(POST_2FA_WAIT_MS);
-        this.captureDebugScreenshot(page, "/tmp/icloud-debug-08-after-2fa.png");
-
-        await this.clickTrustButtonIfPresent(freshAuthFrame, page);
-        await sleep(POST_TRUST_WAIT_MS);
-        return;
-      }
-
-      await sleep(1000);
-
-      if (attempt === TWO_FA_POLL_ATTEMPTS - 1) {
-        this.captureDebugScreenshot(page, "/tmp/icloud-debug-07-2fa-not-found.png");
-        console.log("  WARNING: 2FA input not found — proceeding anyway.");
-      }
-    }
-  }
-
-  private async clickTrustButtonIfPresent(authFrame: any, page: any): Promise<void> {
-    const target = authFrame ?? page;
-
+  private async clickTrustButtonIfPresent(authFrame: any): Promise<void> {
+    const target = authFrame ?? this.page;
     const trustButton = await target.$(TRUST_BUTTON_SELECTOR);
+
     if (trustButton) {
       console.log("  Clicking Trust button...");
       await trustButton.click();
@@ -265,11 +240,8 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
 
     const clicked = await target.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll("button"));
-      const trustButton = buttons.find((b) => b.textContent?.trim() === "Trust");
-      if (trustButton) {
-        trustButton.click();
-        return true;
-      }
+      const trust = buttons.find((b) => b.textContent?.trim() === "Trust");
+      if (trust) { trust.click(); return true; }
       return false;
     });
 
@@ -280,11 +252,11 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
     }
   }
 
-  private async pollForTrustCookie(page: any): Promise<AuthResult> {
+  private async pollForTrustCookieAndClose(): Promise<AuthResult> {
     for (let attempt = 0; attempt < TRUST_COOKIE_POLL_ATTEMPTS; attempt++) {
       await sleep(TRUST_COOKIE_POLL_INTERVAL_MS);
 
-      const cookies = await page.cookies(
+      const cookies = await this.page.cookies(
         "https://www.icloud.com",
         "https://idmsa.apple.com",
         "https://apple.com"
@@ -293,6 +265,7 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
 
       if (trustCookie) {
         console.log("✓ Trust cookie found.");
+        await this.browser.close();
         return {
           trustToken: trustCookie.value,
           cookies: formatCookiesArray(cookies.map((c: any) => `${c.name}=${c.value}`)),
@@ -304,13 +277,14 @@ export class HeadlessBrowserAdapter implements AuthAdapter {
       }
     }
 
-    await page.screenshot({ path: "/tmp/icloud-debug-08-timeout.png" });
-    throw new Error("Timed out waiting for trust cookie — see /tmp/icloud-debug-08-timeout.png");
+    await this.page.screenshot({ path: "/tmp/icloud-debug-timeout.png" });
+    await this.browser.close();
+    throw new Error("Timed out waiting for trust cookie — see /tmp/icloud-debug-timeout.png");
   }
 
-  private captureDebugScreenshot(page: any, path: string): void {
+  private captureDebugScreenshot(path: string): void {
     if (!this.debugEnabled) return;
-    page.screenshot({ path }).catch(() => {});
+    this.page.screenshot({ path }).catch(() => {});
     console.log(`  [debug] screenshot: ${path}`);
   }
 }

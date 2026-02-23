@@ -1,3 +1,4 @@
 node_modules/
 llm-docs/
 temp/
+.github/

@@ -2,6 +2,7 @@ import { parseArgs } from "./core/args.js";
 import { parseIcloudRemotes } from "./core/config.js";
 import { runRemoteSelectionFlow } from "./core/remote-selection.js";
 import { orchestrate } from "./core/orchestrator.js";
+import { Messages } from "./core/messages.js";
 import { BrowserAuthAdapter } from "./adapters/launcher.js";
 import { BrowserDriverBuilder } from "./adapters/browser-driver-builder.js";
 import {
@@ -45,9 +46,9 @@ const { rcloneCommand, updatedConfigContent } = await orchestrate(adapter, {
 
 if (updatedConfigContent !== null) {
   writeRcloneConfigContent(updatedConfigContent);
-  console.log("\n✓ rclone.conf updated successfully.\n");
+  console.log(Messages.RCLONE_CONF_UPDATED);
   testRcloneConnection();
 } else {
-  console.log("\nRun the following command to authenticate:");
+  console.log(Messages.RCLONE_COMMAND_INSTRUCTIONS);
   console.log(rcloneCommand);
 }

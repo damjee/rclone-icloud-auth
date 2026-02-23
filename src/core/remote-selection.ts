@@ -12,11 +12,6 @@ export async function runRemoteSelectionFlow(
 ): Promise<RemoteSelectionResult> {
   if (remotes.length === 0) throw new Error(Messages.NO_ICLOUD_REMOTES);
 
-  if (remotes.length === 1) {
-    log(Messages.AUTO_SELECTED_REMOTE(remotes[0]));
-    return { remoteName: remotes[0] };
-  }
-
   const remoteName = await promptSelect(remotes, savedDefault);
   return { remoteName };
 }

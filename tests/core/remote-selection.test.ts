@@ -11,21 +11,13 @@ describe("runRemoteSelectionFlow", () => {
     ).rejects.toThrow(Messages.NO_ICLOUD_REMOTES);
   });
 
-  it("auto-selects the only remote without prompting when one remote exists", async () => {
-    const promptSelect = vi.fn(async () => "should-not-be-called");
+  it("always calls promptSelect even when only one remote exists", async () => {
+    const promptSelect = vi.fn(async () => "iclouddrive");
 
     const result = await runRemoteSelectionFlow(["iclouddrive"], undefined, promptSelect, noOp);
 
+    expect(promptSelect).toHaveBeenCalledWith(["iclouddrive"], undefined);
     expect(result.remoteName).toBe("iclouddrive");
-    expect(promptSelect).not.toHaveBeenCalled();
-  });
-
-  it("logs the auto-selected remote name when one remote exists", async () => {
-    const log = vi.fn();
-
-    await runRemoteSelectionFlow(["iclouddrive"], undefined, async () => "any", log);
-
-    expect(log).toHaveBeenCalledWith(Messages.AUTO_SELECTED_REMOTE("iclouddrive"));
   });
 
   it("calls promptSelect when multiple remotes exist", async () => {
@@ -47,12 +39,23 @@ describe("runRemoteSelectionFlow", () => {
     expect(promptSelect).toHaveBeenCalledWith(remotes, "iclouddrive");
   });
 
-  it("does not log when multiple remotes exist and promptSelect is used", async () => {
-    const log = vi.fn();
-    const remotes = ["iclouddrive", "work-icloud"];
+  it("passes saved default to promptSelect even when only one remote exists", async () => {
+    const promptSelect = vi.fn(async () => "iclouddrive");
 
-    await runRemoteSelectionFlow(remotes, undefined, async () => "iclouddrive", log);
+    await runRemoteSelectionFlow(["iclouddrive"], "iclouddrive", promptSelect, noOp);
 
-    expect(log).not.toHaveBeenCalled();
+    expect(promptSelect).toHaveBeenCalledWith(["iclouddrive"], "iclouddrive");
+  });
+
+  it("returns the remote name chosen by promptSelect", async () => {
+    const result = await runRemoteSelectionFlow(
+      ["iclouddrive", "work-icloud"],
+      undefined,
+      async () => "work-icloud",
+      noOp
+    );
+
+    expect(result.remoteName).toBe("work-icloud");
   });
 });
+

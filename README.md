@@ -26,13 +26,11 @@ npm install
 
 ## Usage
 
-Prompts for your Apple ID, password, and 2FA code via the terminal. Patches `rclone.conf` automatically.
-
-On startup the tool reads your `rclone.conf`, finds all iCloud remotes (`type = iclouddrive`), and asks you to select which one to update. If there is only one iCloud remote it is selected automatically. Your choice is remembered in `temp/preferences.json` and pre-selected on the next run.
-
 ```bash
 npm start
 ```
+
+Prompts for your Apple ID, password, and 2FA code via the terminal. Patches `rclone.conf` automatically.
 
 ---
 

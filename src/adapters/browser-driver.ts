@@ -1,7 +1,7 @@
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { formatCookiesArray } from "../core/cookies.js";
-import type { AuthFlowDriver } from "../core/headless-flow.js";
+import type { AuthFlowDriver } from "../core/auth-flow.js";
 import type { AuthResult } from "../core/orchestrator.js";
 
 puppeteer.use(StealthPlugin());
@@ -38,10 +38,13 @@ export class BrowserDriver implements AuthFlowDriver {
   private browser: any = null;
   private page: any = null;
 
-  constructor(private readonly debugEnabled: boolean) {}
+  constructor(
+    private readonly debugEnabled: boolean,
+    private readonly log: (message: string) => void = () => {}
+  ) {}
 
   async beginAuth(appleId: string, password: string): Promise<{ twoFactorRequired: boolean }> {
-    console.log("\nLaunching headless browser...");
+    this.log("\nLaunching headless browser...");
 
     this.browser = await puppeteer.launch({
       headless: true,
@@ -74,21 +77,21 @@ export class BrowserDriver implements AuthFlowDriver {
       request.continue();
     });
 
-    console.log("Navigating to iCloud...");
+    this.log("Navigating to iCloud...");
     await this.page.goto(ICLOUD_URL, { waitUntil: "networkidle2" });
 
-    console.log("Clicking sign-in button...");
+    this.log("Clicking sign-in button...");
     const signInButton = await this.page.waitForSelector(SIGN_IN_BUTTON_SELECTOR, {
       timeout: SIGN_IN_BUTTON_TIMEOUT_MS,
     });
     if (!signInButton) throw new Error("Could not find sign-in button on iCloud page");
     await signInButton.click();
 
-    console.log("Waiting for Apple auth frame...");
+    this.log("Waiting for Apple auth frame...");
     await sleep(AUTH_FRAME_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-01-after-signin-click.png");
 
-    console.log("Entering Apple ID...");
+    this.log("Entering Apple ID...");
     await this.fillFieldWithPolling(
       APPLE_ID_POLL_ATTEMPTS,
       POLL_INTERVAL_MS,
@@ -105,13 +108,13 @@ export class BrowserDriver implements AuthFlowDriver {
     await sleep(POST_APPLE_ID_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-03-after-appleid.png");
 
-    console.log("Entering password...");
+    this.log("Entering password...");
     await this.fillPasswordWithTabindexPolling(password, "/tmp/icloud-debug-04-no-password-input.png");
 
     await sleep(POST_PASSWORD_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-05-after-password.png");
 
-    console.log("Checking for 2FA...");
+    this.log("Checking for 2FA...");
     const twoFactorRequired = await this.detectTwoFactor();
 
     return { twoFactorRequired };
@@ -131,19 +134,19 @@ export class BrowserDriver implements AuthFlowDriver {
     await sleep(1000);
     await freshInput.press("Enter");
 
-    console.log("  2FA submitted, waiting for Apple to verify...");
+    this.log("  2FA submitted, waiting for Apple to verify...");
     await sleep(POST_2FA_WAIT_MS);
     this.captureDebugScreenshot("/tmp/icloud-debug-08-after-2fa.png");
 
     await this.clickTrustButtonIfPresent(freshAuthFrame);
     await sleep(POST_TRUST_WAIT_MS);
 
-    console.log("Waiting for authentication to complete...");
+    this.log("Waiting for authentication to complete...");
     return this.pollForTrustCookieAndClose();
   }
 
   async collectResult(): Promise<AuthResult> {
-    console.log("Waiting for authentication to complete...");
+    this.log("Waiting for authentication to complete...");
     return this.pollForTrustCookieAndClose();
   }
 
@@ -162,7 +165,7 @@ export class BrowserDriver implements AuthFlowDriver {
     }
 
     this.captureDebugScreenshot("/tmp/icloud-debug-07-2fa-not-found.png");
-    console.log("  2FA input not found — proceeding without 2FA.");
+    this.log("  2FA input not found — proceeding without 2FA.");
     return false;
   }
 
@@ -233,7 +236,7 @@ export class BrowserDriver implements AuthFlowDriver {
     const trustButton = await target.$(TRUST_BUTTON_SELECTOR);
 
     if (trustButton) {
-      console.log("  Clicking Trust button...");
+      this.log("  Clicking Trust button...");
       await trustButton.click();
       return;
     }
@@ -246,9 +249,9 @@ export class BrowserDriver implements AuthFlowDriver {
     });
 
     if (clicked) {
-      console.log("  Clicked Trust button.");
+      this.log("  Clicked Trust button.");
     } else {
-      console.log("  Trust button not found — may proceed anyway.");
+      this.log("  Trust button not found — may proceed anyway.");
     }
   }
 
@@ -264,7 +267,7 @@ export class BrowserDriver implements AuthFlowDriver {
       const trustCookie = cookies.find((c: any) => c.name === TRUST_COOKIE_NAME);
 
       if (trustCookie) {
-        console.log("✓ Trust cookie found.");
+        this.log("✓ Trust cookie found.");
         await this.browser.close();
         return {
           trustToken: trustCookie.value,
@@ -273,7 +276,7 @@ export class BrowserDriver implements AuthFlowDriver {
       }
 
       if (attempt % 5 === 0) {
-        console.log(`  Waiting... (${attempt * 2}s elapsed, ${cookies.length} cookies so far)`);
+        this.log(`  Waiting... (${attempt * 2}s elapsed, ${cookies.length} cookies so far)`);
       }
     }
 
@@ -285,6 +288,6 @@ export class BrowserDriver implements AuthFlowDriver {
   private captureDebugScreenshot(path: string): void {
     if (!this.debugEnabled) return;
     this.page.screenshot({ path }).catch(() => {});
-    console.log(`  [debug] screenshot: ${path}`);
+    this.log(`  [debug] screenshot: ${path}`);
   }
 }

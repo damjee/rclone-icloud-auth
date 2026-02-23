@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { runHeadlessAuthFlow } from "../../src/core/headless-flow.js";
-import type { AuthFlowDriver } from "../../src/core/headless-flow.js";
+import { runAuthFlow } from "../../src/core/auth-flow.js";
+import type { AuthFlowDriver } from "../../src/core/auth-flow.js";
 import type { AuthResult } from "../../src/core/orchestrator.js";
 
 const FAKE_AUTH_RESULT: AuthResult = {
@@ -47,11 +47,11 @@ class FakeAuthFlowDriver implements AuthFlowDriver {
   }
 }
 
-describe("runHeadlessAuthFlow", () => {
+describe("runAuthFlow", () => {
   it("returns AuthResult from collectResult when 2FA is not required", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    const result = await runHeadlessAuthFlow(
+    const result = await runAuthFlow(
       driver,
       async () => FAKE_CREDENTIALS,
       async () => FAKE_2FA_CODE
@@ -64,7 +64,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
     let promptCalled = false;
 
-    await runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => {
+    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => {
       promptCalled = true;
       return FAKE_2FA_CODE;
     });
@@ -75,7 +75,7 @@ describe("runHeadlessAuthFlow", () => {
   it("does not call completeTwoFactorAuth when 2FA is not required", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
 
     expect(driver.completeTwoFactorAuthCalled).toBe(false);
   });
@@ -83,7 +83,7 @@ describe("runHeadlessAuthFlow", () => {
   it("passes appleId and password from promptCredentials to beginAuth", async () => {
     const driver = new FakeAuthFlowDriver(false);
 
-    await runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
 
     expect(driver.appleIdReceived).toBe(FAKE_CREDENTIALS.appleId);
     expect(driver.passwordReceived).toBe(FAKE_CREDENTIALS.password);
@@ -92,7 +92,7 @@ describe("runHeadlessAuthFlow", () => {
   it("calls completeTwoFactorAuth with the code from promptTwoFactorCode when 2FA is required", async () => {
     const driver = new FakeAuthFlowDriver(true);
 
-    await runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
 
     expect(driver.twoFactorCodeReceived).toBe(FAKE_2FA_CODE);
   });
@@ -100,7 +100,7 @@ describe("runHeadlessAuthFlow", () => {
   it("returns AuthResult from completeTwoFactorAuth when 2FA is required", async () => {
     const driver = new FakeAuthFlowDriver(true);
 
-    const result = await runHeadlessAuthFlow(
+    const result = await runAuthFlow(
       driver,
       async () => FAKE_CREDENTIALS,
       async () => FAKE_2FA_CODE
@@ -112,7 +112,7 @@ describe("runHeadlessAuthFlow", () => {
   it("does not call collectResult when 2FA is required", async () => {
     const driver = new FakeAuthFlowDriver(true);
 
-    await runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
+    await runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE);
 
     expect(driver.collectResultCalled).toBe(false);
   });
@@ -121,7 +121,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => ({ appleId: "", password: "password123" }), async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async () => ({ appleId: "", password: "password123" }), async () => FAKE_2FA_CODE)
     ).rejects.toThrow();
   });
 
@@ -129,7 +129,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => ({ appleId: "test@example.com", password: "" }), async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async () => ({ appleId: "test@example.com", password: "" }), async () => FAKE_2FA_CODE)
     ).rejects.toThrow();
   });
 
@@ -137,7 +137,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(true);
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
     ).rejects.toThrow();
   });
 
@@ -145,7 +145,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false);
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
+      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => "")
     ).resolves.toEqual(FAKE_AUTH_RESULT);
   });
 
@@ -153,7 +153,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false, FAKE_AUTH_RESULT, "beginAuth");
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on beginAuth");
   });
 
@@ -161,7 +161,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(true, FAKE_AUTH_RESULT, "completeTwoFactorAuth");
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on completeTwoFactorAuth");
   });
 
@@ -169,7 +169,7 @@ describe("runHeadlessAuthFlow", () => {
     const driver = new FakeAuthFlowDriver(false, FAKE_AUTH_RESULT, "collectResult");
 
     await expect(
-      runHeadlessAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
+      runAuthFlow(driver, async () => FAKE_CREDENTIALS, async () => FAKE_2FA_CODE)
     ).rejects.toThrow("Driver failed on collectResult");
   });
 });

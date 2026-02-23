@@ -1,4 +1,4 @@
-import { runHeadlessAuthFlow } from "../core/headless-flow.js";
+import { runAuthFlow } from "../core/auth-flow.js";
 import { BrowserDriver } from "./browser-driver.js";
 import { promptUser, resumePrompt, closePrompt } from "./prompt.js";
 import type { AuthAdapter, AuthResult } from "../core/orchestrator.js";
@@ -9,9 +9,9 @@ export class HeadlessAuthAdapter implements AuthAdapter {
   async authenticate(): Promise<AuthResult> {
     console.log("=== rclone iCloud Authenticator ===\n");
 
-    const driver = new BrowserDriver(this.debugEnabled);
+    const driver = new BrowserDriver(this.debugEnabled, console.log);
 
-    const result = await runHeadlessAuthFlow(
+    const result = await runAuthFlow(
       driver,
       async () => ({
         appleId: await promptUser("Apple ID email: "),
@@ -20,7 +20,8 @@ export class HeadlessAuthAdapter implements AuthAdapter {
       async () => {
         resumePrompt();
         return promptUser("\n2FA code (from your iPhone): ");
-      }
+      },
+      console.log
     );
 
     closePrompt();

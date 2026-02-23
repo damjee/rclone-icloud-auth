@@ -10,10 +10,11 @@ const EMPTY_APPLE_ID_ERROR = "Apple ID must not be empty";
 const EMPTY_PASSWORD_ERROR = "Password must not be empty";
 const EMPTY_TWO_FACTOR_CODE_ERROR = "Two-factor code must not be empty";
 
-export async function runHeadlessAuthFlow(
+export async function runAuthFlow(
   driver: AuthFlowDriver,
   promptCredentials: () => Promise<{ appleId: string; password: string }>,
-  promptTwoFactorCode: () => Promise<string>
+  promptTwoFactorCode: () => Promise<string>,
+  log: (message: string) => void = () => {}
 ): Promise<AuthResult> {
   const { appleId, password } = await promptCredentials();
 
@@ -23,6 +24,7 @@ export async function runHeadlessAuthFlow(
   const { twoFactorRequired } = await driver.beginAuth(appleId, password);
 
   if (twoFactorRequired) {
+    log("Two-factor authentication required.");
     const code = await promptTwoFactorCode();
     if (!code) throw new Error(EMPTY_TWO_FACTOR_CODE_ERROR);
     return driver.completeTwoFactorAuth(code);

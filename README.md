@@ -40,4 +40,4 @@ Prompts for your Apple ID, password, and 2FA code via the terminal. Patches `rcl
 Run `rclone config` to add an iCloud remote first, then re-run this tool.
 
 **rclone.conf not found**
-If `~/.config/rclone/rclone.conf` doesn't exist, the script prints the `rclone config update` command to run manually.
+If `~/.config/rclone/rclone.conf` doesn't exist, the script prints the `rclone config update` command to run to create it.

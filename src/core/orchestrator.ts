@@ -14,7 +14,7 @@ interface OrchestrateOptions {
   remoteName: string;
 }
 
-interface OrchestrateResult {
+export interface OrchestrateResult {
   rcloneCommand: string;
   updatedConfigContent: string | null;
 }

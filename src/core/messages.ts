@@ -14,5 +14,8 @@ export const Messages = {
   PROMPT_SELECT_REMOTE: "\nSelect remote: ",
   RCLONE_CONF_UPDATED: "\n✓ rclone.conf updated successfully.\n",
   RCLONE_COMMAND_INSTRUCTIONS: "\nRun the following command to authenticate:",
+  EMPTY_APPLE_ID: "Apple ID must not be empty",
+  EMPTY_PASSWORD: "Password must not be empty",
+  EMPTY_TWO_FACTOR_CODE: "Two-factor code must not be empty",
 } as const;
 
